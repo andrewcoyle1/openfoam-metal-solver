@@ -1,0 +1,4 @@
+MetalPCGSolver.C
+metalSpMV.mm
+
+LIB = $(FOAM_USER_LIBBIN)/libmetalPCG

@@ -1,0 +1,4 @@
+SOURCE += MetalPCGSolver.C
+SOURCE += metalSpMV.mm
+
+LIB = $(FOAM_USER_LIBBIN)/libmetalPCG

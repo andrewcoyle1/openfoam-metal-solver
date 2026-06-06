@@ -1,0 +1,6 @@
+$(OBJECTS_DIR)/metalSpMV.mm.dep: \
+metalSpMV.mm \
+metalSpMV.h \
+
+metalSpMV.h :
+
