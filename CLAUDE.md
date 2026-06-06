@@ -31,9 +31,25 @@ A hybrid PCG linear solver plugin for OpenFOAM 11 on macOS Apple Silicon. Regist
 
 Speedup grows with mesh size as GPU memory bandwidth advantage over CPU becomes dominant relative to Metal command buffer dispatch overhead. Correctness confirmed at both sizes.
 
-## Milestone 2 (follow-on, not in scope yet)
-- Batch multiple SpMV calls into a single command buffer to amortize dispatch overhead further
-- Replace DIC with GAMG as preconditioner to reduce iteration count 10× at large scale
+## Milestone 2 benchmark results — GAMG preconditioner (1M cells, 50 steps)
+
+| Solver | Preconditioner | Iters/step | ExecutionTime |
+|--------|---------------|------------|---------------|
+| PCG (CPU) | DIC | ~220 | 253.2s |
+| metalPCG (GPU SpMV) | DIC | ~220 | 188.7s |
+| PCG (CPU) | GAMG | 1–9 | **58.3s** |
+| metalPCG (GPU SpMV) | GAMG | 1–9 | 59.6s |
+
+Key finding: GAMG preconditioner is the dominant win (4–5× over DIC) regardless of SpMV backend.
+With GAMG, PCG+GAMG ≈ metalPCG+GAMG because GAMG V-cycle smoothers (GaussSeidel) are
+CPU-bound with sequential data dependencies — GPU SpMV is no longer the bottleneck.
+
+GPU SpMV acceleration is most valuable with DIC (many iterations). To make GPU matter with
+GAMG, the GaussSeidel smoother would need to run on GPU — harder due to triangular solve.
+
+## Milestone 2 follow-on items
+- GPU-accelerated GaussSeidel smoother for GAMG: colouring or polynomial approximation
+- Batch command buffers for DIC path to further reduce dispatch overhead
 - Multi-rank parallel: each MPI rank gets its own `MTLCommandQueue` on the shared device
 
 ## Key constraints
