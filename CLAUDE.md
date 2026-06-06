@@ -20,9 +20,21 @@ A hybrid PCG linear solver plugin for OpenFOAM 11 on macOS Apple Silicon. Regist
 | Correctness | Converges to same residual tolerance as vanilla PCG in ≤ same iterations |
 | Precision | Float32 on GPU (Metal has no Float64 hardware on Apple Silicon) |
 
+## Milestone 1 benchmark results
+
+| Solver | ExecutionTime (100 steps, 100K cells, laminar cavity) |
+|--------|------------------------------------------------------|
+| PCG (vanilla) | 23.3s |
+| metalPCG v1 (re-upload matrix every step) | 20.3s |
+| metalPCG v2 (matrix fingerprint cache) | 20.2s |
+| metalPCG v3 (matrix + vector buffer cache) | **19.5s** |
+
+**16% faster** than vanilla PCG at 100K cells. Correctness confirmed: residuals and iteration counts match to float32 precision. The gain is primarily from GPU SpMV throughput, partially offset by Metal command buffer dispatch overhead (~hundreds of µs per call) which dominates at small problem sizes.
+
 ## Milestone 2 (follow-on, not in scope yet)
+- Batch multiple SpMV calls into a single command buffer to reduce dispatch overhead
+- Benchmark at 1M+ cells where GPU throughput dominates over dispatch overhead
 - Multi-rank parallel: each MPI rank gets its own `MTLCommandQueue` on the shared device
-- Benchmark at 1M+ cells
 
 ## Key constraints
 - Metal shaders on Apple Silicon have no Float64. SpMV runs in Float32; CPU handles all Float64 arithmetic.

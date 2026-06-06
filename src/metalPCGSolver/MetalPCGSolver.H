@@ -16,9 +16,10 @@ class MetalPCGSolver
 :
     public lduMatrix::solver
 {
-    // Mutable so solve() (const) can dispatch GPU work
-    mutable MetalSpMV sparseMV_;
-    mutable bool      gpuReady_;
+    // Pointer into the process-wide cached SpMV in MetalShared.
+    // Not owned — the singleton owns the object.
+    mutable MetalSpMV* sparseMV_;
+    mutable bool       gpuReady_;
 
     // Convert the stored lduMatrix to CSR and upload to the GPU.
     // Called once at construction; assumes matrix coefficients do not

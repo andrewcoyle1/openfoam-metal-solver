@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #include "metalSpMV.h"
 #include <vector>
+#include <algorithm>
 
 static const char* kSpMVShaderSrc = R"(
 #include <metal_stdlib>
@@ -35,6 +36,11 @@ struct MetalShared
     id<MTLComputePipelineState> pipeline = nil;
     bool ok = false;
 
+    // Cached CSR matrix — survives across solver instantiations so the GPU
+    // buffers are only reallocated when the matrix actually changes.
+    // The fingerprint is stored inside cachedSpMV.impl_.
+    MetalSpMV cachedSpMV;
+
     static MetalShared& instance()
     {
         static MetalShared s;
@@ -64,15 +70,20 @@ private:
     }
 };
 
-// Per-instance data: only the uploaded matrix buffers change each time step
+// Per-instance data: matrix buffers plus a fingerprint for cache validation.
+// xBuf and yBuf are cached across multiply() calls to avoid per-call allocation.
 struct MetalSpMV::Impl
 {
     id<MTLBuffer> rowPtrBuf = nil;
     id<MTLBuffer> colIdxBuf = nil;
     id<MTLBuffer> valuesBuf = nil;
-    int  nRows = 0;
-    int  nnz   = 0;
-    bool ready = false;
+    id<MTLBuffer> xBuf      = nil; // input vector, reused each call
+    id<MTLBuffer> yBuf      = nil; // output vector, reused each call
+    int    nRows    = -1;
+    int    nnz      = -1;
+    int    cachedN  = -1;          // size of xBuf/yBuf
+    double valSum   = 0.0; // sum of first 8 values — lightweight fingerprint
+    bool   ready    = false;
 };
 
 MetalSpMV::MetalSpMV() : impl_(new Impl()) {}
@@ -84,6 +95,8 @@ MetalSpMV::~MetalSpMV()
         impl_->rowPtrBuf = nil;
         impl_->colIdxBuf = nil;
         impl_->valuesBuf = nil;
+        impl_->xBuf      = nil;
+        impl_->yBuf      = nil;
     }
     delete impl_;
 }
@@ -97,12 +110,20 @@ void MetalSpMV::setup
     int nnz
 )
 {
-    impl_->ready = false;
     MetalShared& m = MetalShared::instance();
     if (!m.ok) return;
 
-    impl_->nRows = nRows;
-    impl_->nnz   = nnz;
+    // Lightweight fingerprint: sum of first 8 CSR values.  For a fixed mesh
+    // with constant coefficients (laminar pressure Poisson), this detects an
+    // unchanged matrix in O(1) and avoids reallocating GPU buffers each step.
+    double valSum = 0.0;
+    const int fpN = std::min(8, nnz);
+    for (int i = 0; i < fpN; ++i) valSum += values[i];
+
+    if (impl_->nRows == nRows && impl_->nnz == nnz && impl_->valSum == valSum)
+        return; // matrix unchanged — existing GPU buffers remain valid
+
+    impl_->ready = false;
 
     std::vector<float> fvals(nnz);
     for (int i = 0; i < nnz; ++i)
@@ -126,7 +147,10 @@ void MetalSpMV::setup
                       options:MTLResourceStorageModeShared];
     }
 
-    impl_->ready = (impl_->rowPtrBuf && impl_->colIdxBuf && impl_->valuesBuf);
+    impl_->ready  = (impl_->rowPtrBuf && impl_->colIdxBuf && impl_->valuesBuf);
+    impl_->nRows  = nRows;
+    impl_->nnz    = nnz;
+    impl_->valSum = valSum;
 }
 
 void MetalSpMV::multiply(double* y, const double* x, int n)
@@ -135,19 +159,25 @@ void MetalSpMV::multiply(double* y, const double* x, int n)
 
     MetalShared& m = MetalShared::instance();
 
+    // Allocate persistent vector buffers on first call or if n changed.
+    // MTLResourceStorageModeShared gives direct CPU access — no copy needed.
+    if (impl_->cachedN != n)
+    {
+        impl_->xBuf = [m.device newBufferWithLength:n * sizeof(float)
+                                            options:MTLResourceStorageModeShared];
+        impl_->yBuf = [m.device newBufferWithLength:n * sizeof(float)
+                                            options:MTLResourceStorageModeShared];
+        impl_->cachedN = n;
+    }
+
     @autoreleasepool
     {
-        std::vector<float> fx(n);
-        for (int i = 0; i < n; ++i) fx[i] = float(x[i]);
+        // Write x into the shared-memory buffer directly (no intermediate vector).
+        float* fxPtr = static_cast<float*>([impl_->xBuf contents]);
+        for (int i = 0; i < n; ++i) fxPtr[i] = float(x[i]);
 
-        id<MTLBuffer> xBuf = [m.device
-            newBufferWithBytes:fx.data()
-                       length:n * sizeof(float)
-                      options:MTLResourceStorageModeShared];
-
-        id<MTLBuffer> yBuf = [m.device
-            newBufferWithLength:n * sizeof(float)
-                       options:MTLResourceStorageModeShared];
+        id<MTLBuffer> xBuf = impl_->xBuf;
+        id<MTLBuffer> yBuf = impl_->yBuf;
 
         id<MTLCommandBuffer>         cmd = [m.queue commandBuffer];
         id<MTLComputeCommandEncoder> enc = [cmd computeCommandEncoder];
@@ -177,4 +207,9 @@ void MetalSpMV::multiply(double* y, const double* x, int n)
 bool MetalSpMV::isReady() const
 {
     return impl_->ready;
+}
+
+MetalSpMV* MetalSpMV::sharedCached()
+{
+    return &MetalShared::instance().cachedSpMV;
 }

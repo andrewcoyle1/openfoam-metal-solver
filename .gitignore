@@ -7,8 +7,10 @@ platforms/
 src/*/Make/*/
 src/*/lnInclude/
 
-# Tutorial timestep output
-tutorials/**/[0-9]*/
+# Tutorial timestep output (decimal timesteps: 0.001/, 0.01/, 0.1/, 1.0/)
+# and integer timesteps 1/ through 9999/
+tutorials/**/0.[0-9]*/
+tutorials/**/[1-9]*/
 tutorials/**/[0-9][0-9]*/
 tutorials/**/constant/polyMesh/
 tutorials/**/blockMesh.log

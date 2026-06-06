@@ -26,6 +26,10 @@ public:
 
     bool isReady() const;
 
+    // Returns the process-wide cached SpMV instance held in MetalShared.
+    // Callers should call setup() only when the matrix fingerprint has changed.
+    static MetalSpMV* sharedCached();
+
 private:
     struct Impl;
     Impl* impl_;

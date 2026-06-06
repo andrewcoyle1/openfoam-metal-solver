@@ -1,6 +1,7 @@
 #include "MetalPCGSolver.H"
 #include <vector>
 #include <algorithm>
+#include <cmath>
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -74,15 +75,16 @@ void Foam::MetalPCGSolver::buildAndUploadCSR() const
         pos[u]++;
     }
 
-    sparseMV_.setup(nCells, rowPtr.data(), colIdx.data(), values.data(), nnz);
-    gpuReady_ = sparseMV_.isReady();
+    const bool wasReady = sparseMV_->isReady();
+    sparseMV_->setup(nCells, rowPtr.data(), colIdx.data(), values.data(), nnz);
+    gpuReady_ = sparseMV_->isReady();
 
-    if (gpuReady_)
+    if (gpuReady_ && !wasReady)
     {
-        Info<< "metalPCG: GPU SpMV ready — "
+        Info<< "metalPCG: GPU SpMV uploaded — "
             << nCells << " rows, " << nnz << " non-zeros" << endl;
     }
-    else
+    else if (!gpuReady_)
     {
         Info<< "metalPCG: GPU setup failed, falling back to CPU" << endl;
     }
@@ -110,7 +112,7 @@ Foam::MetalPCGSolver::MetalPCGSolver
         interfaces,
         solverControls
     ),
-    sparseMV_(),
+    sparseMV_(MetalSpMV::sharedCached()),
     gpuReady_(false)
 {
     buildAndUploadCSR();
@@ -159,7 +161,7 @@ Foam::solverPerformance Foam::MetalPCGSolver::solve
     {
         if (gpuReady_ && !hasInterfaces)
         {
-            sparseMV_.multiply(result.begin(), vec.begin(), nCells);
+            sparseMV_->multiply(result.begin(), vec.begin(), nCells);
         }
         else
         {
