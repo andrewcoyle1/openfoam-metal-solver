@@ -2,3 +2,14 @@ platforms/
 *.o
 *.so
 *.dylib
+
+# wmake build directories
+src/*/Make/*/
+src/*/lnInclude/
+
+# Tutorial timestep output (keep 0/ initial conditions only)
+tutorials/*/[0-9]*/
+tutorials/*/[0-9][0-9]*/
+tutorials/*/constant/polyMesh/
+tutorials/*/blockMesh.log
+tutorials/*/log.*
