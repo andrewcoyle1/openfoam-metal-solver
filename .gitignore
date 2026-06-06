@@ -1,17 +1,25 @@
-platforms/
-*.o
-*.so
-*.dylib
-
-# wmake build directories
-src/*/Make/*/
+# wmake build artifacts
+src/*/Make/darwin*/
+src/*/Make/linux*/
 src/*/lnInclude/
 
-# Tutorial timestep output (decimal timesteps: 0.001/, 0.01/, 0.1/, 1.0/)
-# and integer timesteps 1/ through 9999/
-tutorials/**/0.[0-9]*/
-tutorials/**/[1-9]*/
-tutorials/**/[0-9][0-9]*/
-tutorials/**/constant/polyMesh/
-tutorials/**/blockMesh.log
-tutorials/**/log.*
+# Generated meshes (run blockMesh from blockMeshDict)
+constant/polyMesh/
+**/constant/polyMesh/
+
+# Simulation output (timestep directories)
+tutorials/*/*/[0-9]*/
+tutorials/*/[0-9]*/
+tutorials/*/[0-9][0-9]*/
+
+# Decomposition artifacts
+**/constant/polyMesh/cellProc
+**/processor*/
+
+# Logs and paraview files
+**/log.*
+**/blockMesh.log
+**/*.foam
+
+# macOS
+.DS_Store

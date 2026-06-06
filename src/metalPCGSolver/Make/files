@@ -1,4 +1,5 @@
 MetalPCGSolver.C
+MetalGCGSSmoother.C
 metalSpMV.mm
 
 LIB = $(FOAM_USER_LIBBIN)/libmetalPCG
