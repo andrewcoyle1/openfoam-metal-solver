@@ -24,16 +24,16 @@ A hybrid PCG linear solver plugin for OpenFOAM 11 on macOS Apple Silicon. Regist
 
 | Solver | ExecutionTime (100 steps, 100K cells, laminar cavity) |
 |--------|------------------------------------------------------|
-| PCG (vanilla) | 23.3s |
-| metalPCG v1 (re-upload matrix every step) | 20.3s |
-| metalPCG v2 (matrix fingerprint cache) | 20.2s |
-| metalPCG v3 (matrix + vector buffer cache) | **19.5s** |
+| PCG (vanilla, 100K) | 23.3s |
+| metalPCG (100K, final) | **19.5s** (+16%) |
+| PCG (vanilla, 1M) | 253.2s |
+| metalPCG (1M) | **188.7s** (+25%) |
 
-**16% faster** than vanilla PCG at 100K cells. Correctness confirmed: residuals and iteration counts match to float32 precision. The gain is primarily from GPU SpMV throughput, partially offset by Metal command buffer dispatch overhead (~hundreds of µs per call) which dominates at small problem sizes.
+Speedup grows with mesh size as GPU memory bandwidth advantage over CPU becomes dominant relative to Metal command buffer dispatch overhead. Correctness confirmed at both sizes.
 
 ## Milestone 2 (follow-on, not in scope yet)
-- Batch multiple SpMV calls into a single command buffer to reduce dispatch overhead
-- Benchmark at 1M+ cells where GPU throughput dominates over dispatch overhead
+- Batch multiple SpMV calls into a single command buffer to amortize dispatch overhead further
+- Replace DIC with GAMG as preconditioner to reduce iteration count 10× at large scale
 - Multi-rank parallel: each MPI rank gets its own `MTLCommandQueue` on the shared device
 
 ## Key constraints
